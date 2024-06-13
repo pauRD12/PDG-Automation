@@ -1,58 +1,44 @@
-import os.path
+import hou
+import os
+from email.message import EmailMessage
+import ssl
+import smtplib
+import json
 
-from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
-from googleapiclient.discovery import build
-from googleapiclient.errors import HttpError
+# Reference to hda
+node = hou.pwd().parent().parent()
 
-# If modifying these scopes, delete the file token.json.
-SCOPES = ["https://www.googleapis.com/auth/drive.metadata.readonly"]
+# Get data from parameters
+email_sender = node.parm("email_sender").evalAsString()
+email_reciver = node.parm("email_reciver").evalAsString()
+subject = node.parm("subject").evalAsString()
+body = node.parm("body").evalAsString()
+password_path = node.parm("password_path").evalAsString()
 
+# Obtain password from json file
+open_file = open(password_path)
+content = json.load(open_file)
+password = content["password"]
 
-def main():
-  """Shows basic usage of the Drive v3 API.
-  Prints the names and ids of the first 10 files the user has access to.
-  """
-  creds = None
-  # The file token.json stores the user's access and refresh tokens, and is
-  # created automatically when the authorization flow completes for the first
-  # time.
-  if os.path.exists("token.json"):
-    creds = Credentials.from_authorized_user_file("token.json", SCOPES)
-  # If there are no (valid) credentials available, let the user log in.
-  if not creds or not creds.valid:
-    if creds and creds.expired and creds.refresh_token:
-      creds.refresh(Request())
-    else:
-      flow = InstalledAppFlow.from_client_secrets_file(
-          "credentials.json", SCOPES
-      )
-      creds = flow.run_local_server(port=0)
-    # Save the credentials for the next run
-    with open("token.json", "w") as token:
-      token.write(creds.to_json())
+# Create the email message
+em = EmailMessage()
+em["From"] = email_sender
+em["To"] = email_reciver
+em["Subject"] = subject
+em.set_content(body)
 
-  try:
-    service = build("drive", "v3", credentials=creds)
+# Get the file path for the attachment from the HDA parameters
+file_path = node.parm("outputfilepath").evalAsString()
 
-    # Call the Drive v3 API
-    results = (
-        service.files()
-        .list(pageSize=10, fields="nextPageToken, files(id, name)")
-        .execute()
-    )
-    items = results.get("files", [])
+# Check if the attachment is enabled and attach the file if so
+if node.parm("attach_video").eval()==1:
+    with open(file_path, "rb") as file:
+        file_data = file.read()
+        file_name = os.path.basename(file_path)
+    em.add_attachment(file_data, maintype="application", subtype="octet-stream", filename=file_name)
 
-    if not items:
-      print("No files found.")
-      return
-    print("Files:")
-    for item in items:
-      print(f"{item['name']} ({item['id']})")
-  except HttpError as error:
-    # TODO(developer) - Handle errors from drive API.
-    print(f"An error occurred: {error}")
-
-
-main()
+# Create a secure SSL context and send the email
+context = ssl.create_default_context()
+with smtplib.SMTP_SSL("smtp.gmail.com",465,context = context) as smtp:
+        smtp.login(email_sender, password)
+        smtp.sendmail(email_sender,email_reciver.split(","),em.as_string())
