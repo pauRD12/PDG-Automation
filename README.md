@@ -1,5 +1,6 @@
 # PDG-Automation
 HDA to create multiple versions of a simulation, cache them, set up a comparison video and send an email notification. All automated in a single node
+- Demo Video: https://www.linkedin.com/feed/update/urn:li:activity:7188910580215279617/
 ### Prerequisites:
 - Have `FFmpeg` installed: https://ffmpeg.org/download.html
 - Have `ImageMagick` installed: https://imagemagick.org/script/download.php
